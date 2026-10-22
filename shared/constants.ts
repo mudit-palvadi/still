@@ -1,0 +1,9 @@
+export const ROUND_DURATION_SEC = 60;
+export const ROUND_DURATION_MS = ROUND_DURATION_SEC * 1000;
+export const CALIBRATION_MS = 3000;
+export const TEMPTATION_MS = 5000;
+export const MAX_NAME_LENGTH = 20;
+export const MAX_VERDICT_LENGTH = 220;
+export const MAX_BETRAYALS = 200;
+export const ROUND_VALID_MS = 15 * 60 * 1000;
+export const LEADERBOARD_LIMIT = 20;

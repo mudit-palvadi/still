@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: still
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: MONGODB_DB
+        value: still
+      - key: GEMMA_PROVIDER
+        value: google
+      - key: GEMMA_MODEL
+        value: gemma-3-27b-it
+      - key: MONGODB_URI
+        sync: false
+      - key: GEMMA_API_KEY
+        sync: false
