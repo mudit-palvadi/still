@@ -261,13 +261,13 @@ export class StillnessEngine {
   private calibrationStart = 0;
   private calibrationSamples: number[] = [];
   private roundStart = 0;
-  private lastFrameAt = 0;
   private lastMotion: MotionResult | null = null;
   private previousPose: Partial<Record<JointName, NormalizedPoint>> | null = null;
   private ema = 0;
   private baseline = 0.004;
-  private stillnessMs = 0;
-  private currentFreezeMs = 0;
+  private stillFrames = 0;
+  private totalFrames = 0;
+  private freezeStartedAt: number | null = null;
   private longestFreezeMs = 0;
   private betrayals = 0;
   private targetedBetrayals = 0;
@@ -292,12 +292,12 @@ export class StillnessEngine {
     this.calibrationStart = now;
     this.calibrationSamples = [];
     this.previousPose = null;
-    this.lastFrameAt = now;
     this.lastMotion = null;
     this.ema = 0;
     this.baseline = 0.004;
-    this.stillnessMs = 0;
-    this.currentFreezeMs = 0;
+    this.stillFrames = 0;
+    this.totalFrames = 0;
+    this.freezeStartedAt = null;
     this.longestFreezeMs = 0;
     this.betrayals = 0;
     this.targetedBetrayals = 0;
@@ -353,8 +353,6 @@ export class StillnessEngine {
     if (this.phase !== 'playing') return this.snapshot(now);
 
     const elapsedMs = Math.max(1, now - this.roundStart);
-    const dt = clamp((now - this.lastFrameAt) / 1000, 0.001, 0.12);
-    this.lastFrameAt = now;
 
     this.ema =
       this.ema === 0
@@ -370,12 +368,18 @@ export class StillnessEngine {
       this.baseline * this.config.stillnessFactor,
     );
 
+    // Count observed frames rather than clamped wall-clock time so a low frame
+    // rate (or a slow pose model) cannot quietly steal a player's stillness.
+    this.totalFrames += 1;
     if (this.ema <= stillThreshold) {
-      this.stillnessMs += dt * 1000;
-      this.currentFreezeMs += dt * 1000;
-      this.longestFreezeMs = Math.max(this.longestFreezeMs, this.currentFreezeMs);
+      this.stillFrames += 1;
+      if (this.freezeStartedAt === null) this.freezeStartedAt = now;
+      this.longestFreezeMs = Math.max(this.longestFreezeMs, now - this.freezeStartedAt);
     } else {
-      this.currentFreezeMs = 0;
+      if (this.freezeStartedAt !== null) {
+        this.longestFreezeMs = Math.max(this.longestFreezeMs, now - this.freezeStartedAt);
+      }
+      this.freezeStartedAt = null;
     }
 
     const majorThreshold = Math.max(
@@ -422,7 +426,7 @@ export class StillnessEngine {
       this.overThresholdFrames = 0;
       this.targetFrames = 0;
       this.lastBetrayalAt = now;
-      this.currentFreezeMs = 0;
+      this.freezeStartedAt = null;
     }
 
     if (elapsedMs >= this.config.durationMs) {
@@ -455,7 +459,13 @@ export class StillnessEngine {
     this.lastNow = now;
     const duration = this.config.durationMs / 1000;
     const elapsedSec = clamp((now - this.roundStart) / 1000, 1, duration);
-    const stillnessPct = clamp((this.stillnessMs / 1000 / elapsedSec) * 100, 0, 100);
+    if (this.freezeStartedAt !== null) {
+      this.longestFreezeMs = Math.max(this.longestFreezeMs, now - this.freezeStartedAt);
+      this.freezeStartedAt = null;
+    }
+    this.longestFreezeMs = Math.min(this.longestFreezeMs, this.config.durationMs);
+    const stillnessPct =
+      this.totalFrames > 0 ? clamp((this.stillFrames / this.totalFrames) * 100, 0, 100) : 0;
     const freezePct = clamp((this.longestFreezeMs / 1000 / elapsedSec) * 100, 0, 100);
     const score = clamp(
       0.7 * stillnessPct + 0.3 * freezePct - this.betrayals * 2,
@@ -516,10 +526,11 @@ export class StillnessEngine {
     this.baseline = forced ? 0.004 : computeBaseline(this.calibrationSamples);
     this.phase = 'playing';
     this.roundStart = now;
-    this.lastFrameAt = now;
     this.ema = 0;
-    this.stillnessMs = 0;
-    this.currentFreezeMs = 0;
+    this.stillFrames = 0;
+    this.totalFrames = 0;
+    // Calibration just proved the player can hold still; the freeze clock starts now.
+    this.freezeStartedAt = now;
     this.longestFreezeMs = 0;
     this.lastBetrayalAt = -Infinity;
   }
@@ -542,7 +553,8 @@ export class StillnessEngine {
         ? 0
         : clamp((now - this.roundStart) / 1000, 0, this.config.durationMs / 1000);
     const denominator = Math.max(1, elapsed);
-    const stillnessPct = clamp((this.stillnessMs / 1000 / denominator) * 100, 0, 100);
+    const stillnessPct =
+      this.totalFrames > 0 ? clamp((this.stillFrames / this.totalFrames) * 100, 0, 100) : 0;
     const freezePct = clamp((this.longestFreezeMs / 1000 / denominator) * 100, 0, 100);
     const rating = clamp(0.7 * stillnessPct + 0.3 * freezePct - this.betrayals * 2, 0, 100);
     const temptation =
@@ -561,8 +573,11 @@ export class StillnessEngine {
       betrayals: this.betrayals,
       targetedBetrayals: this.targetedBetrayals,
       stillnessPct,
-      longestFreeze: this.longestFreezeMs / 1000,
-      currentFreeze: this.currentFreezeMs / 1000,
+      longestFreeze: Math.min(this.longestFreezeMs, this.config.durationMs) / 1000,
+      currentFreeze:
+        this.freezeStartedAt !== null
+          ? Math.min(Math.max(0, now - this.freezeStartedAt), this.config.durationMs) / 1000
+          : 0,
       motion: this.lastMotion?.motion ?? 0,
       ema: this.ema,
       baseline: this.baseline,

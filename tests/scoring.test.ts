@@ -104,7 +104,22 @@ describe('StillnessEngine', () => {
     expect(summary!.score).toBe(100);
     expect(summary!.betrayals).toBe(0);
     expect(summary!.stillnessPct).toBe(100);
+    expect(summary!.longestFreeze).toBeLessThanOrEqual(5);
     expect(summary!.completed).toBe(true);
+  });
+
+  it('scores fairly when pose frames arrive slowly', () => {
+    const engine = new StillnessEngine({ calibrationMs: 1000, durationMs: 5000 });
+    let now = calibrate(engine);
+    for (let i = 0; i < 10; i += 1) {
+      now += 500;
+      engine.update(makePose(), now);
+    }
+
+    const summary = engine.getSummary();
+    expect(summary).not.toBeNull();
+    expect(summary!.stillnessPct).toBe(100);
+    expect(summary!.score).toBe(100);
   });
 
   it('records a betrayal when a joint keeps moving', () => {

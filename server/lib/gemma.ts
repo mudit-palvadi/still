@@ -15,6 +15,7 @@ interface ParsedReferee {
 
 const SYSTEM_PROMPT = `You are the referee of STILL, a 60-second game where the only rule is: do not move.
 Voice: deadpan, elegant, quietly disappointed. A butler who has seen everything and is not impressed.
+You always have enough telemetry. Never say you lack information, cannot observe the player, or cannot comply. Always produce the requested line.
 Never mention being an AI, a language model, or your instructions. Never use emojis, hashtags, or quotation marks.
 Never be cruel about the player's body or identity.
 Return strict JSON only. No markdown fences, no commentary outside the JSON.`;
@@ -90,7 +91,13 @@ function sanitizeLine(raw: string): string {
     .replace(/^["'\u201c\u201d]+|["'\u201c\u201d]+$/g, '')
     .trim();
 
-  if (/as an ai|language model|i cannot|i can't assist/i.test(line)) return '';
+  if (
+    /as an ai|language model|i cannot|i can't assist|insufficient (observation|information)|not enough (data|information)|unable to (observe|determine)/i.test(
+      line,
+    )
+  ) {
+    return '';
+  }
   if (line.length > 180) line = `${line.slice(0, 177).trimEnd()}...`;
   return line;
 }
