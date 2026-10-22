@@ -72,7 +72,7 @@ export const api = {
     return request<RefereeResponse>('/api/referee', {
       method: 'POST',
       body: payload,
-      timeoutMs: 5200,
+      timeoutMs: 8500,
     });
   },
 

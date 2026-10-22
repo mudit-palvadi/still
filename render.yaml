@@ -16,6 +16,6 @@ services:
       - key: GEMMA_PROVIDER
         value: google
       - key: GEMMA_MODEL
-        value: gemma-3-27b-it
+        value: gemma-4-26b-a4b-it
       - key: GEMMA_API_KEY
         sync: false

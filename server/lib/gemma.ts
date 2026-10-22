@@ -33,13 +33,27 @@ function normalizeProvider(value: string | undefined): 'google' | 'ollama' {
   return value?.toLowerCase() === 'ollama' ? 'ollama' : 'google';
 }
 
+const GOOGLE_DEFAULT_MODEL = 'gemma-4-26b-a4b-it';
+
 function defaultModel(provider: 'google' | 'ollama'): string {
-  return provider === 'ollama' ? 'gemma3:4b' : 'gemma-3-27b-it';
+  return provider === 'ollama' ? 'gemma3:4b' : GOOGLE_DEFAULT_MODEL;
+}
+
+/**
+ * Gemma 3 was retired from the Gemini API. Keep old deployments working even
+ * if their GEMMA_MODEL env var still points at the previous model id.
+ */
+function resolveModel(provider: 'google' | 'ollama', configured: string | undefined): string {
+  if (!configured) return defaultModel(provider);
+  if (provider === 'google' && /^gemma-3(?:-|$)/i.test(configured)) {
+    return GOOGLE_DEFAULT_MODEL;
+  }
+  return configured;
 }
 
 export function getGemmaInfo(): GemmaInfo {
   const provider = normalizeProvider(process.env.GEMMA_PROVIDER);
-  const model = process.env.GEMMA_MODEL || defaultModel(provider);
+  const model = resolveModel(provider, process.env.GEMMA_MODEL?.trim());
   const configured =
     provider === 'ollama' || Boolean(process.env.GEMMA_API_KEY?.trim());
   return { configured, provider, model };
@@ -141,10 +155,12 @@ async function callGoogle(prompt: string, model: string, apiKey: string): Promis
       generationConfig: {
         temperature: 0.95,
         topP: 0.95,
-        maxOutputTokens: 140,
+        maxOutputTokens: 160,
+        // The referee needs a quick quip, not a reasoning trace.
+        thinkingConfig: { thinkingLevel: 'minimal' },
       },
     }),
-    signal: AbortSignal.timeout(4500),
+    signal: AbortSignal.timeout(7000),
   });
 
   const data = (await response.json().catch(() => null)) as {

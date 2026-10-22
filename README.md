@@ -8,7 +8,7 @@ Sixty seconds. One rule: **don't move.** A Gemma-powered referee watches your sk
 
 > Built for the [Hacktoberfest Open-Source AI Challenge: Week 3 — Slow and Steady](https://dev.to/challenges/hacktoberfest-week3-2026-10-19).
 
-**Live demo:** `https://still.onrender.com` <!-- update after deploy -->
+**Live demo:** [https://still-s88j.onrender.com](https://still-s88j.onrender.com)
 
 ---
 
@@ -20,7 +20,7 @@ STILL turns stillness into a ranked sport.
 2. **Freeze** for sixty seconds while on-device pose estimation scores every twitch.
 3. **Survive the referee.** Gemma reads your telemetry, insults your technique, and picks the joint you are least able to control. Move it during the five-second temptation and you lose double points.
 
-Your score combines total stillness, your longest uninterrupted freeze, and the number of betrayals. The stillest human goes on the global board.
+Your score combines total stillness, your longest uninterrupted freeze, and the number of betrayals. The stillest human goes on the board.
 
 | Rank | Score | Official assessment |
 | --- | ---: | --- |
@@ -40,7 +40,7 @@ For once, doing nothing is the winning strategy. No reps, no streak, no producti
 
 Gemma is not a chatbot bolted onto the side. It is the **game director**.
 
-At fixed cue points the client sends a compact telemetry packet — elapsed time, rating, betrayals, stillness percentage, longest freeze, per-joint movement totals, and the last betrayal — to the server. The server prompts an open-weight **Gemma 3 27B** model through Google AI Studio and asks for strict JSON:
+At fixed cue points the client sends a compact telemetry packet — elapsed time, rating, betrayals, stillness percentage, longest freeze, per-joint movement totals, and the last betrayal — to the server. The server prompts an open-weight **Gemma 4 26B A4B** model through Google AI Studio and asks for strict JSON:
 
 ```json
 { "line": "A fly has landed on your left wrist. It is reading your messages.", "targetJoint": "left_wrist" }
@@ -87,7 +87,8 @@ flowchart LR
     FB[Deterministic<br/>fallback referee]
     API --> FB
     API --> GM[Gemma provider]
-    API --> DB[(MongoDB Atlas)]
+    API --> DB[(MongoDB Atlas<br/>optional)]
+    API --> MEM[(In-memory<br/>leaderboard fallback)]
   end
 
   TEL -->|JSON: joint deltas only| API
@@ -103,9 +104,9 @@ flowchart LR
 | Front end | React 19, TypeScript, Vite |
 | Pose estimation | TensorFlow.js + MoveNet (on-device, WebGL with CPU fallback) |
 | Scoring | Deterministic TypeScript engine with unit tests |
-| Referee | Gemma 3 27B via Google AI Studio, or local Gemma via Ollama |
+| Referee | Gemma 4 26B A4B via Google AI Studio, or local Gemma via Ollama |
 | API | Node.js, Express 5, TypeScript |
-| Leaderboard | MongoDB Atlas (with in-memory fallback for local dev) |
+| Leaderboard | MongoDB Atlas when configured, otherwise in-memory |
 | Hosting | Render |
 | License | MIT |
 
@@ -138,7 +139,7 @@ Without `GEMMA_API_KEY` or `MONGODB_URI`, the app still works: the referee uses 
 | `MONGODB_DB` | `still` | Database name |
 | `GEMMA_PROVIDER` | `google` | `google` (AI Studio) or `ollama` (local) |
 | `GEMMA_API_KEY` | _(empty)_ | Google AI Studio key |
-| `GEMMA_MODEL` | `gemma-3-27b-it` | Model id; for Ollama, e.g. `gemma3:4b` |
+| `GEMMA_MODEL` | `gemma-4-26b-a4b-it` | Model id; for Ollama, e.g. `gemma3:4b` |
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Local Ollama endpoint |
 
 Google AI Studio:
@@ -146,7 +147,7 @@ Google AI Studio:
 ```bash
 GEMMA_PROVIDER=google
 GEMMA_API_KEY=your-key
-GEMMA_MODEL=gemma-3-27b-it
+GEMMA_MODEL=gemma-4-26b-a4b-it
 ```
 
 Fully local:
