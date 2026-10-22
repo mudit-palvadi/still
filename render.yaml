@@ -17,7 +17,5 @@ services:
         value: google
       - key: GEMMA_MODEL
         value: gemma-3-27b-it
-      - key: MONGODB_URI
-        sync: false
       - key: GEMMA_API_KEY
         sync: false
