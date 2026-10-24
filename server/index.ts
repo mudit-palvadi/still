@@ -14,7 +14,7 @@ import type {
 } from '../shared/types';
 import { LEADERBOARD_LIMIT, ROUND_VALID_MS } from '../shared/constants';
 import { createStore, toLeaderboardEntry, type Store } from './lib/db';
-import { getGemmaInfo, referee } from './lib/gemma';
+import { getGemmaInfo, getRefereeDiagnostics, referee } from './lib/gemma';
 import {
   sanitizeRefereeRequest,
   sanitizeScoreSubmission,
@@ -65,6 +65,7 @@ async function main(): Promise<void> {
       gemma: info,
       db: store.kind,
       uptime: Math.round(process.uptime()),
+      lastReferee: getRefereeDiagnostics(),
     };
     res.json(body);
   });

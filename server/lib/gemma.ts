@@ -13,6 +13,27 @@ interface ParsedReferee {
   targetJoint?: JointName;
 }
 
+export interface RefereeDiagnostics {
+  mode: RefereeRequest['mode'];
+  source: 'gemma' | 'fallback';
+  model: string;
+  latencyMs: number;
+  at: string;
+  error?: string;
+}
+
+let lastReferee: RefereeDiagnostics | null = null;
+
+export function getRefereeDiagnostics(): RefereeDiagnostics | null {
+  return lastReferee;
+}
+
+function redactError(message: string): string {
+  return message
+    .replace(/([?&]key=)[^&\s]+/gi, '$1***')
+    .slice(0, 300);
+}
+
 const SYSTEM_PROMPT = `You are the referee of STILL, a 60-second game where the only rule is: do not move.
 Voice: deadpan, elegant, quietly disappointed. A butler who has seen everything and is not impressed.
 You always have enough telemetry. Never say you lack information, cannot observe the player, or cannot comply. Always produce the requested line.
@@ -152,11 +173,15 @@ async function callGoogle(prompt: string, model: string, apiKey: string): Promis
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      // Gemma 4 supports system instructions natively, but the prompt is also
+      // embedded below so the exact same request works on older models and
+      // local Ollama builds.
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       generationConfig: {
         temperature: 0.95,
         topP: 0.95,
         maxOutputTokens: 160,
-        // The referee needs a quick quip, not a reasoning trace.
+        // Gemma 4 can think; the referee needs a quip, not a reasoning trace.
         thinkingConfig: { thinkingLevel: 'minimal' },
       },
     }),
@@ -234,9 +259,29 @@ export async function referee(request: RefereeRequest): Promise<RefereeResponse>
 
   const info = getGemmaInfo();
   const started = Date.now();
+  const at = new Date().toISOString();
+
+  const record = (
+    source: 'gemma' | 'fallback',
+    error?: string,
+  ): RefereeDiagnostics => {
+    const entry: RefereeDiagnostics = {
+      mode: request.mode,
+      source,
+      model: info.model,
+      latencyMs: Date.now() - started,
+      at,
+    };
+    if (error) entry.error = redactError(error);
+    lastReferee = entry;
+    return entry;
+  };
 
   try {
-    if (!info.configured) return fallbackReferee(request);
+    if (!info.configured) {
+      record('fallback', 'GEMMA_API_KEY is not configured');
+      return fallbackReferee(request);
+    }
 
     const prompt = buildPrompt(request);
     const text =
@@ -245,7 +290,10 @@ export async function referee(request: RefereeRequest): Promise<RefereeResponse>
         : await callGoogle(prompt, info.model, process.env.GEMMA_API_KEY!.trim());
 
     const parsed = parseRefereeText(text);
-    if (!parsed) return fallbackReferee(request);
+    if (!parsed) {
+      record('fallback', 'Gemma returned an unusable line');
+      return fallbackReferee(request);
+    }
 
     const targetJoint =
       request.mode === 'temptation'
@@ -260,6 +308,7 @@ export async function referee(request: RefereeRequest): Promise<RefereeResponse>
       model: info.model,
     };
 
+    record('gemma');
     cache.set(key, { value: result, expiresAt: Date.now() + 120_000 });
     if (cache.size > 500) {
       const oldest = cache.keys().next().value;
@@ -270,10 +319,12 @@ export async function referee(request: RefereeRequest): Promise<RefereeResponse>
     );
     return result;
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.warn(
       `[referee] Gemma failed after ${Date.now() - started}ms:`,
-      error instanceof Error ? error.message : error,
+      message,
     );
+    record('fallback', message);
     return fallbackReferee(request);
   }
 }

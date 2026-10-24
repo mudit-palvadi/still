@@ -122,6 +122,15 @@ export interface LeaderboardResponse {
   source: 'mongodb' | 'memory';
 }
 
+export interface RefereeDiagnostics {
+  mode: 'taunt' | 'temptation' | 'verdict';
+  source: 'gemma' | 'fallback';
+  model: string;
+  latencyMs: number;
+  at: string;
+  error?: string;
+}
+
 export interface HealthResponse {
   ok: boolean;
   gemma: {
@@ -131,4 +140,6 @@ export interface HealthResponse {
   };
   db: 'mongodb' | 'memory';
   uptime: number;
+  /** Result of the most recent referee call, useful for verifying the live model. */
+  lastReferee?: RefereeDiagnostics | null;
 }
