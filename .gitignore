@@ -8,3 +8,6 @@ coverage/
 .vite/
 .playwright-mcp/
 still-*.png
+
+# Local agent tooling
+.agents/
